@@ -1,0 +1,153 @@
+#!/bin/sh
+
+EXIT_SUCCESS=0
+EXIT_FAILURE=1
+
+for option; do
+	case "$option" in
+	*=?*)
+		value=`expr -- "$option" : '[^=]*=\(.*\)'`
+		;;
+	*=)
+		value=
+		;;
+	*)
+		value=yes
+		;;
+	esac
+
+	case "$option" in
+	--help)
+		echo "Usage: $0 [OPTIONS]"
+		echo
+		echo "Options:"
+		echo "  --ck-path=X			Use concurrencykit's include files from X."
+		echo "  --fetch-ck			Fetch concurrencykit as a submodule."
+		echo
+		echo "The following environment variables may be used:"
+		echo "   CC       C compiler command"
+		exit $EXIT_SUCCESS
+		;;
+	--ck-path=*)
+		CK_PATH="$value"
+		;;
+	--fetch-ck)
+		CK_SUBMODULE=1
+		;;
+	--*)
+		if test "$OPTION_CHECKING" -eq 1; then
+			echo "$0 [--help]"
+			echo "Unknown option $option"
+			exit $EXIT_FAILURE
+		fi
+		;;
+	*=*)
+		NAME=`expr -- "$option" : '\([^=]*\)='`
+		eval "$NAME='$value'"
+		export $NAME
+		;;
+	*)
+		echo "$0 [--help]"
+		echo "Unknown option $option"
+		exit $EXIT_FAILURE
+		;;
+	esac
+done
+
+do_cc() {
+    local compiler="$1"
+    shift
+    echo "$CC $compiler $@"
+    "$CC" $compiler "$@" || return $?
+    return 0
+}
+
+assert()
+{
+
+	if test "$#" -eq 2; then
+		fail=$2
+		print=true
+	elif test "$#" -eq 3; then
+		fail=$3
+		print=echo
+	else
+		echo "Usage: assert <test> <fail string> or assert <test> <success string> <fail string>" 1>&2
+		exit $EXIT_FAILURE
+	fi
+
+	if test -z "$1"; then
+		echo "failed  [$fail]"
+		exit $EXIT_FAILURE
+	else
+		${print} "success [$1]"
+	fi
+}
+
+CC=`which "${CC:-cc}"`
+if test -z "$CC" -o ! -x "$CC"; then
+	CC=`which "${CC:-gcc}"`
+fi
+assert "$CC" "not found"
+
+GIT=`which git`
+assert "$GIT" "not found"
+
+cat << EOF > .1.c
+#include <ck_spinlock.h>
+int main(void){return 0;}
+EOF
+
+if [ -z "$CK_PATH" ]; then
+	if [ ! -z "$CK_SUBMODULE" ]; then
+			git submodule init ck
+			git submodule update ck
+			cd ck && ./configure && make && cd ..
+			CK_PATH=ck
+	fi
+fi
+if [ ! -z "$CK_PATH" ]; then
+	MYCFLAGS=-I"$CK_PATH/include"
+fi
+
+$CC $MYCFLAGS -o .1 .1.c
+r=$?
+rm -f .1.c .1
+
+if test "$r" -ne 0; then
+	if [ -z "$CK_PATH" ]; then
+		echo "concurrencykit headers not installed system-wide, and no --ck-path option provided. Consider calling configure with --fetch-ck." >& 2
+		exit $EXIT_FAILURE
+	else
+		echo "Something went wrong wich concurrencykit. Most likely it was not built at '$CK_PATH'." >& 2
+		exit $EXIT_FAILURE
+	fi
+else
+	echo "success [ck]"
+fi
+
+rm -f .1.c .1
+
+cat << EOF > .1.c
+#include <sys/eventfd.h>
+int main(void){eventfd(0, EFD_CLOEXEC | EFD_SEMAPHORE);return 0;}
+EOF
+
+$CC $MYCFLAGS -o .1 .1.c
+r=$?
+rm -f .1.c .1
+
+if test "$r" -ne 0; then
+	echo "eventfd(2) not found." >& 2
+	exit $EXIT_FAILURE
+else
+	echo "success [eventfd]"
+fi
+
+echo "CFLAGS :=" > Makefile
+if [ ! -z "$CK_PATH" ]; then
+	echo "CFLAGS += -I\"$CK_PATH/include\"\n" >> Makefile
+fi
+cat Makefile.base >> Makefile
+
+echo "success"

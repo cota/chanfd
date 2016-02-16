@@ -1,0 +1,25 @@
+CFLAGS += -g3 -ggdb -O3
+CFLAGS += -I.
+CFLAGS += -Wall
+CFLAGS += -Wextra
+CFLAGS += -Wmissing-declarations
+CFLAGS += -Wno-missing-field-initializers
+CFLAGS += -Wno-unused-parameter
+CFLAGS += -Wpointer-arith
+CFLAGS += -Wundef
+
+CHANFD_LIB := libchanfd.a
+CHANFD_OBJS := chanfd.o
+
+all: $(CHANFD_LIB)
+.PHONY: all clean
+
+$(CHANFD_LIB): $(CHANFD_OBJS)
+	$(AR) crs $@ $^
+
+clean:
+	$(RM) $(CHANFD_OBJS)
+	$(RM) $(CHANFD_LIB)
+
+distclean: clean
+	$(RM) Makefile
