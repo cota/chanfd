@@ -20,8 +20,8 @@ to wait on channels just like on any other file descriptors.
 struct chanfd *chanfd_create(size_t size, size_t n_elems); /* pass size=0 for unbuffered channel */
 void chanfd_destroy(struct chanfd *); /* Note: no 'close' operation */
 
-int chanfd_recv(struct chanfd *chan, void *data); /* see the header file for type-safe macros */
-int chanfd_send(struct chanfd *chan, const void *data);
+void chanfd_recv(struct chanfd *chan, void *data); /* see the header file for type-safe macros */
+void chanfd_send(struct chanfd *chan, const void *data);
 
 int chanfd_receiver_fd(struct chanfd *chan); /* these can be used with select(2) etc. */
 int chanfd_sender_fd(struct chanfd *chan);
