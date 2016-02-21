@@ -251,9 +251,6 @@ static void unbf_channel_recv(struct chanfd *ch, void *data)
 	memcpy(data, to_ptr(ch->datap), ch->size);
 	up(uchan->ack_fd);
 	up(ch->sender_fd);
-
-	ck_pr_dec_64(&ch->elems);
-	ck_pr_fence_store();
 }
 
 static inline void __inc(size_t *val, size_t max_elems)
@@ -291,9 +288,6 @@ static void buff_channel_recv(struct chanfd *ch, void *data)
 	buff_channel_unlock(ch);
 
 	up(ch->sender_fd);
-
-	ck_pr_dec_64(&ch->elems);
-	ck_pr_fence_store();
 }
 
 /**
@@ -312,6 +306,8 @@ void chanfd_recv(struct chanfd *ch, void *data)
 		buff_channel_recv(ch, data);
 	else
 		unbf_channel_recv(ch, data);
+	ck_pr_dec_64(&ch->elems);
+	ck_pr_fence_store();
 }
 
 static void unbf_channel_send(struct chanfd *ch, const void *data)
@@ -322,9 +318,6 @@ static void unbf_channel_send(struct chanfd *ch, const void *data)
 	memcpy(to_ptr(ch->datap), data, ch->size);
 	up(ch->receiver_fd);
 	down(uchan->ack_fd);
-
-	ck_pr_inc_64(&ch->elems);
-	ck_pr_fence_store();
 }
 
 static void buff_channel_send(struct chanfd *ch, const void *data)
@@ -339,9 +332,6 @@ static void buff_channel_send(struct chanfd *ch, const void *data)
 	buff_channel_unlock(ch);
 
 	up(ch->receiver_fd);
-
-	ck_pr_inc_64(&ch->elems);
-	ck_pr_fence_store();
 }
 
 /**
@@ -386,4 +376,6 @@ void chanfd_send(struct chanfd *ch, const void *data)
 		buff_channel_send(ch, data);
 	else
 		unbf_channel_send(ch, data);
+	ck_pr_inc_64(&ch->elems);
+	ck_pr_fence_store();
 }
